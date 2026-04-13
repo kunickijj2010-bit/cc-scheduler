@@ -85,6 +85,7 @@ export default function App() {
     }
 
     if (totalChanges.length > 0) {
+      if (!confirm(`Внедрить ${totalChanges.length} изменений в расписание?\nЭто действие можно отменить через \"Отменить\" (Ctrl+Z).`)) return;
       // Force optimization to be global (apply from Jan 1st) as requested by user
       const globalChanges = totalChanges.map(chg => ({ ...chg, effect: '01/01' }));
       planner.applyBatchOptimization(globalChanges, "Внедрение оптимизаций");
@@ -330,6 +331,12 @@ export default function App() {
                   <button className="btn btn-primary" style={{ marginLeft: 8, padding: '2px 8px', fontSize: '.8rem' }} onClick={bakeOptimization}>
                     ✅ Внедрить в расписание
                   </button>
+                )}
+                {planner.canUndo && (
+                  <button className="btn-icon" style={{ marginLeft: 4, fontSize: '.85rem' }} onClick={planner.undo} title="Отменить последнее действие (Ctrl+Z)">↩️</button>
+                )}
+                {planner.hasCache && (
+                  <button className="btn-icon" style={{ marginLeft: 4, fontSize: '.75rem', color: 'var(--r)' }} onClick={() => { if (confirm('Сбросить ВСЕ изменения и вернуться к исходным данным?')) planner.clearCache(); }} title="Сбросить все изменения">🗑️ Сброс</button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>

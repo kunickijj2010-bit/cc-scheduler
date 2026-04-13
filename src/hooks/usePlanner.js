@@ -107,8 +107,10 @@ function reducer(state, action) {
       let newEmps = [...state.employees];
       
       changes.forEach(chg => {
-        // Use fuzzy matchName for reliable lookup (handles parenthetical aliases, Supabase name variations)
-        const empIndex = newEmps.findIndex(e => matchName(e.nm, chg.name) || matchName(e.nm, chg.nm));
+        // Try fuzzy match first, then strict equality as fallback
+        let empIndex = newEmps.findIndex(e => matchName(e.nm, chg.name));
+        if (empIndex === -1 && chg.nm) empIndex = newEmps.findIndex(e => matchName(e.nm, chg.nm));
+        if (empIndex === -1) empIndex = newEmps.findIndex(e => e.nm === chg.name || e.nm === chg.nm);
         if (empIndex === -1) {
           console.warn(`[BATCH_OPT] Employee not found: "${chg.name || chg.nm}"`);
           return;
@@ -133,12 +135,8 @@ function reducer(state, action) {
           // Time-only change (e.g. 08:00-20:00 → 09:00-21:00)
           e = applyTimeChange(e, chg.to, sm, sd, changeReason);
         }
-        
-        if (chg.shiftDays) {
-          chg.shiftDays.forEach(([m, d, val]) => {
-            e = setDayValue(e, m, d, val, changeReason);
-          });
-        }
+        // Note: shiftDays is a numeric cycle offset used for preview only,
+        // not an array. Pattern/time changes above handle actual schedule updates.
         
         newEmps[empIndex] = e;
       });
