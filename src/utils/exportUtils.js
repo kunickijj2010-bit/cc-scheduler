@@ -27,15 +27,34 @@ export async function exportToExcel(employees, metrics, curMonth, appliedOpts = 
 
     // Sheet 1: Summary
     const summarySheet = wb.addWorksheet('Сводка');
-    const manualCount = employees.filter(e => e._modified && e._changes?.some(c => !c.reason?.includes('оптимизац'))).length;
-    const optCount = employees.filter(e => e._modified && e._changes?.some(c => c.reason?.includes('оптимизац'))).length;
+    const manualCount = employees.filter(e => e._modified).length;
+    
+    // Count optimization-affected employees from applied variants (bakedVars)
+    const optAffected = new Set();
+    for (const dp of DP) {
+      const v = appliedOpts[dp] || 'current';
+      if (v === 'current') continue;
+      const vChanges = getChangesForVariant(v);
+      for (const e of employees.filter(emp => emp.dp === dp)) {
+        const dm = MD[0];
+        for (let d = 0; d < dm; d++) {
+          const eff = getEffectiveHours(e, 0, d, vChanges);
+          if (eff.changed) { optAffected.add(e.nm); break; }
+        }
+      }
+    }
+    const optCount = optAffected.size;
+    const totalChanged = new Set([
+      ...employees.filter(e => e._modified).map(e => e.nm),
+      ...optAffected
+    ]).size;
 
     summarySheet.addRows([
       ['КЦ — Планировщик графиков', '', '', '', new Date().toLocaleDateString('ru')],
       [],
       ['Метрика', 'Значение'],
       ['Всего операторов', employees.length],
-      ['Всего изменено (итог)', employees.filter(e => e._modified).length],
+      ['Всего изменено (итог)', totalChanged],
       ['  - Ручные правки (ФИО)', manualCount],
       ['  - Авто-оптимизации (ФИО)', optCount],
       [],
@@ -44,9 +63,23 @@ export async function exportToExcel(employees, metrics, curMonth, appliedOpts = 
 
     for (const dp of DP) {
       const deptEmps = employees.filter(e => e.dp === dp);
-      const modCount = deptEmps.filter(e => e._modified).length;
-      const mCount = deptEmps.filter(e => e._modified && e._changes?.some(c => !c.reason?.includes('оптимизац'))).length;
-      const oCount = deptEmps.filter(e => e._modified && e._changes?.some(c => c.reason?.includes('оптимизац'))).length;
+      const mCount = deptEmps.filter(e => e._modified).length;
+      const v = appliedOpts[dp] || 'current';
+      let oCount = 0;
+      if (v !== 'current') {
+        const vChanges = getChangesForVariant(v);
+        for (const e of deptEmps) {
+          const dm = MD[0];
+          for (let d = 0; d < dm; d++) {
+            const eff = getEffectiveHours(e, 0, d, vChanges);
+            if (eff.changed) { oCount++; break; }
+          }
+        }
+      }
+      const modCount = new Set([
+        ...deptEmps.filter(e => e._modified).map(e => e.nm),
+        ...(v !== 'current' ? deptEmps.filter(e => optAffected.has(e.nm)).map(e => e.nm) : [])
+      ]).size;
       
       const avgHours = deptEmps.length > 0
         ? Math.round(deptEmps.reduce((s, e) => s + (e.ms[curMonth]?.t || 0), 0) / deptEmps.length)
@@ -73,7 +106,7 @@ export async function exportToExcel(employees, metrics, curMonth, appliedOpts = 
       schedSheet.getColumn(5 + MD[m] + 1).width = 8; // Часы
 
       employees.forEach((e, i) => {
-        const v = appliedOpts['all'] !== 'current' ? appliedOpts['all'] : (appliedOpts[e.dp] || 'current');
+        const v = appliedOpts[e.dp] || 'current';
         const vChanges = v !== 'current' ? getChangesForVariant(v) : [];
         const origEmp = e._original || e;
         
@@ -284,7 +317,7 @@ export async function exportHourlyHeatmapToExcel(employees, appliedOpts = { all:
         employees.forEach(e => {
           if (dept !== 'Суммарно по КЦ' && e.dp !== dept) return;
 
-          const v = appliedOpts['all'] !== 'current' ? appliedOpts['all'] : (appliedOpts[e.dp] || 'current');
+          const v = appliedOpts[e.dp] || 'current';
           const vChanges = v !== 'current' ? getChangesForVariant(v) : [];
           const origEmp = e._original || e;
 
