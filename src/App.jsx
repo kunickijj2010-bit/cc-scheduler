@@ -32,10 +32,33 @@ export default function App() {
   const [curTab, setCurTab] = useState('planner');
   const [plannerView, setPlannerView] = useState('grid'); // 'grid' or 'cal'
   const [deptOptVars, setDeptOptVars] = useState({ NDC: 'current', GDS: 'current', VIP: 'current', all: 'current' });
+  // Baked variants: stored separately so 'Текущий (База)' can clear them
+  const [bakedVars, setBakedVars] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('cc_baked_vars')) || {}; } catch { return {}; }
+  });
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [curMonth, setCurMonth] = useState(new Date().getMonth());
   const [curDept, setCurDept] = useState('all');
   const [isForecast, setIsForecast] = useState(false);
+
+  // Persist bakedVars
+  useEffect(() => {
+    try { localStorage.setItem('cc_baked_vars', JSON.stringify(bakedVars)); } catch {}
+  }, [bakedVars]);
+
+  // Effective optimization variants: live selection > baked > current
+  const effectiveVars = useMemo(() => {
+    const ev = { all: 'current' };
+    for (const d of DP) {
+      if (deptOptVars['all'] !== 'current') ev[d] = deptOptVars['all'];
+      else if (deptOptVars[d] !== 'current') ev[d] = deptOptVars[d];
+      else if (bakedVars[d]) ev[d] = bakedVars[d];
+      else ev[d] = 'current';
+    }
+    // Also set 'all' if ALL departments share the same non-current variant  
+    ev.all = deptOptVars['all'];
+    return ev;
+  }, [deptOptVars, bakedVars]);
 
   // Initialize planner when raw data loads or refreshes
   useEffect(() => {
@@ -59,59 +82,45 @@ export default function App() {
   const modifiedCount = useMemo(() => filteredEmps.filter(e => e._modified).length, [filteredEmps]);
 
   const bakeOptimization = () => {
+    // Determine which variant to bake for which departments
     const globalOpt = deptOptVars['all'];
     const getsAll = globalOpt !== 'current';
     
-    let totalChanges = [];
+    const newBaked = { ...bakedVars };
+    let bakedCount = 0;
     
     if (curDept === 'all') {
-      // If we are in "All" view, either apply globalOpt to everyone, 
-      // or if global is current, apply individual selections for each dept.
       if (getsAll) {
-        totalChanges = getChangesForVariant(globalOpt);
+        DP.forEach(d => { newBaked[d] = globalOpt; bakedCount++; });
       } else {
         DP.forEach(d => {
-          const v = deptOptVars[d];
-          if (v !== 'current') {
-            totalChanges = [...totalChanges, ...getChangesForVariant(v).filter(c => c.dept === d)];
-          }
+          if (deptOptVars[d] !== 'current') { newBaked[d] = deptOptVars[d]; bakedCount++; }
         });
       }
     } else {
       const v = getsAll ? globalOpt : deptOptVars[curDept];
-      if (v !== 'current') {
-        totalChanges = getChangesForVariant(v).filter(c => c.dept === curDept);
-      }
+      if (v !== 'current') { newBaked[curDept] = v; bakedCount++; }
     }
 
-    if (totalChanges.length > 0) {
-      if (!confirm(`Внедрить ${totalChanges.length} изменений в расписание?\nЭто действие можно отменить через \"Отменить\" (Ctrl+Z).`)) return;
-      // Force optimization to be global (apply from Jan 1st) as requested by user
-      const globalChanges = totalChanges.map(chg => ({ ...chg, effect: '01/01' }));
-      planner.applyBatchOptimization(globalChanges, "Внедрение оптимизаций");
-      // Reset the used variants back to current
-      if (curDept === 'all' && getsAll) {
-        setDeptOptVars(prev => ({ ...prev, all: 'current' }));
-      } else if (curDept !== 'all') {
-        setDeptOptVars(prev => ({ ...prev, [curDept]: 'current', all: 'current' }));
-      } else {
-        // Reset all individual depts
-        const reset = { all: 'current' };
-        DP.forEach(d => reset[d] = 'current');
-        setDeptOptVars(reset);
-      }
+    if (bakedCount > 0) {
+      if (!confirm(`Закрепить оптимизацию для ${bakedCount} отд.?\nНажмите «Текущий (База)» чтобы вернуть исходные значения.`)) return;
+      setBakedVars(newBaked);
+      // Reset live selection back to current
+      const reset = { all: 'current' };
+      DP.forEach(d => reset[d] = 'current');
+      setDeptOptVars(reset);
     } else {
-      alert("Нет предложенных изменений для выбранных параметров.");
+      alert('Нет выбранных оптимизаций для закрепления.');
     }
   };
 
-  // Count optimization-affected employees across active variants
+  // Count optimization-affected employees across effective variants
   const optChangedCount = useMemo(() => {
     let count = 0;
     const dm = MD[curMonth];
     
     for (const e of filteredEmps) {
-      const v = deptOptVars['all'] !== 'current' ? deptOptVars['all'] : (deptOptVars[e.dp] || 'current');
+      const v = effectiveVars[e.dp] || 'current';
       if (v === 'current') continue;
       
       const vChanges = getChangesForVariant(v);
@@ -121,16 +130,16 @@ export default function App() {
       }
     }
     return count;
-  }, [filteredEmps, deptOptVars, curMonth]);
+  }, [filteredEmps, effectiveVars, curMonth]);
 
   // Ensure auto-shifts are computed for any department that needs them (D or C)
   useMemo(() => {
-    const activeVariants = Object.values(deptOptVars);
+    const activeVariants = [...Object.values(deptOptVars), ...Object.values(bakedVars)];
     if (employees.length > 0 && activeVariants.some(v => v === 'D' || v === 'C')) {
       computeAutoShifts(employees, false, isForecast);
       if (activeVariants.some(v => v === 'C')) computeAutoShifts(employees, true, isForecast);
     }
-  }, [employees, deptOptVars, isForecast]);
+  }, [employees, deptOptVars, bakedVars, isForecast]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -224,14 +233,14 @@ export default function App() {
           <button
             type="button"
             className="btn-icon"
-            onClick={() => exportHourlyHeatmapToExcel(employees, deptOptVars)}
+            onClick={() => exportHourlyHeatmapToExcel(employees, effectiveVars)}
             title="Годовая почасовая статистика"
             style={{ marginRight: '8px' }}
           >📈</button>
           <button
             type="button"
             className="btn-icon"
-            onClick={() => exportToExcel(employees, metrics, curMonth, deptOptVars)}
+            onClick={() => exportToExcel(employees, metrics, curMonth, effectiveVars)}
             title="Экспорт в Excel"
           >📊</button>
           <button
@@ -318,18 +327,40 @@ export default function App() {
             <div className="flt" style={{ marginTop: 20, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span style={{ fontSize: '.75rem', color: 'var(--t2)', marginRight: 8 }}>Оптимизация:</span>
-                {Object.entries(VARIANT_LABELS).map(([v, label]) => (
-                  <button 
-                    key={v} 
-                    className={`fb ${deptOptVars[curDept] === v ? 'on' : ''}`} 
-                    onClick={() => setDeptOptVars(prev => ({ ...prev, [curDept]: v }))}
-                  >
-                    {label}
-                  </button>
-                ))}
-                {deptOptVars[curDept] !== 'current' && (
+                {Object.entries(VARIANT_LABELS).map(([v, label]) => {
+                  // Button is 'active' if it's the live selection, or if it's 'current' and matches baked state
+                  const curDeptKey = curDept === 'all' ? 'all' : curDept;
+                  const liveV = deptOptVars[curDeptKey];
+                  const bakedV = curDept === 'all' ? null : bakedVars[curDept];
+                  const isActive = liveV === v || (liveV === 'current' && v === 'current' && !bakedV);
+                  const isBaked = v === 'current' && bakedV && liveV === 'current';
+                  
+                  return (
+                    <button 
+                      key={v} 
+                      className={`fb ${isActive ? 'on' : ''} ${isBaked ? '' : ''}`}
+                      style={isBaked ? { borderColor: 'var(--ac)', opacity: 0.7 } : (bakedV === v && liveV === 'current' ? { borderColor: 'var(--g)', background: 'rgba(0,200,100,0.15)' } : {})}
+                      onClick={() => {
+                        if (v === 'current') {
+                          // Clear live selection AND baked for this dept
+                          setDeptOptVars(prev => ({ ...prev, [curDeptKey]: 'current', all: 'current' }));
+                          if (curDept === 'all') {
+                            setBakedVars({});
+                          } else {
+                            setBakedVars(prev => { const n = { ...prev }; delete n[curDept]; return n; });
+                          }
+                        } else {
+                          setDeptOptVars(prev => ({ ...prev, [curDeptKey]: v }));
+                        }
+                      }}
+                    >
+                      {label}{bakedV === v && liveV === 'current' ? ' ✅' : ''}
+                    </button>
+                  );
+                })}
+                {deptOptVars[curDept === 'all' ? 'all' : curDept] !== 'current' && (
                   <button className="btn btn-primary" style={{ marginLeft: 8, padding: '2px 8px', fontSize: '.8rem' }} onClick={bakeOptimization}>
-                    ✅ Внедрить в расписание
+                    ✅ Закрепить
                   </button>
                 )}
               </div>
@@ -358,7 +389,7 @@ export default function App() {
                     onChangeTime={planner.changeTime}
                     onRevert={planner.revert}
                     metrics={metrics}
-                    deptOptVars={deptOptVars}
+                    deptOptVars={effectiveVars}
                   />
                 </div>
 
@@ -366,7 +397,7 @@ export default function App() {
                 <CoverageChart metrics={metrics} curMonth={curMonth} curDept={curDept} />
 
                 {/* Heatmap */}
-                <Heatmap employees={filteredEmps} metrics={metrics} curMonth={curMonth} curDept={curDept} isForecast={isForecast} deptOptVars={deptOptVars} />
+                <Heatmap employees={filteredEmps} metrics={metrics} curMonth={curMonth} curDept={curDept} isForecast={isForecast} deptOptVars={effectiveVars} />
 
                 {/* Validation */}
                 <ValidationPanel employees={filteredEmps} metrics={metrics} curMonth={curMonth} />
@@ -377,7 +408,7 @@ export default function App() {
                   employees={filteredEmps}
                   curMonth={curMonth}
                   isForecast={isForecast}
-                  deptOptVars={deptOptVars}
+                  deptOptVars={effectiveVars}
                 />
               </div>
             )}
