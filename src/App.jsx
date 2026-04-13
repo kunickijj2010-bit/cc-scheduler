@@ -31,7 +31,16 @@ export default function App() {
   const planner = usePlanner([]);
   const [curTab, setCurTab] = useState('planner');
   const [plannerView, setPlannerView] = useState('grid'); // 'grid' or 'cal'
-  const [deptOptVars, setDeptOptVars] = useState({ NDC: 'current', GDS: 'current', VIP: 'current', all: 'current' });
+  const [deptOptVars, setDeptOptVars] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('cc_dept_opt_vars')) || { NDC: 'current', GDS: 'current', VIP: 'current', all: 'current' }; } 
+    catch { return { NDC: 'current', GDS: 'current', VIP: 'current', all: 'current' }; }
+  });
+  
+  // Persist current selection
+  useEffect(() => {
+    try { localStorage.setItem('cc_dept_opt_vars', JSON.stringify(deptOptVars)); } catch {}
+  }, [deptOptVars]);
+
   // Baked variants: stored separately so 'Текущий (База)' can clear them
   const [bakedVars, setBakedVars] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cc_baked_vars')) || {}; } catch { return {}; }
@@ -50,13 +59,13 @@ export default function App() {
   const effectiveVars = useMemo(() => {
     const ev = { all: 'current' };
     for (const d of DP) {
-      if (deptOptVars['all'] !== 'current') ev[d] = deptOptVars['all'];
-      else if (deptOptVars[d] !== 'current') ev[d] = deptOptVars[d];
+      if (deptOptVars['all'] && deptOptVars['all'] !== 'current') ev[d] = deptOptVars['all'];
+      else if (deptOptVars[d] && deptOptVars[d] !== 'current') ev[d] = deptOptVars[d];
       else if (bakedVars[d]) ev[d] = bakedVars[d];
       else ev[d] = 'current';
     }
     // Also set 'all' if ALL departments share the same non-current variant  
-    ev.all = deptOptVars['all'];
+    ev.all = deptOptVars['all'] || 'current';
     return ev;
   }, [deptOptVars, bakedVars]);
 

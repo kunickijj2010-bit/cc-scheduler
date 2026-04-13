@@ -50,21 +50,21 @@ function reducer(state, action) {
         if (cached) {
           const mods = JSON.parse(cached);
           mergedEmps = mergedEmps.map(emp => {
-            const mod = mods.find(m => m.nm === emp.nm);
+            // Use fuzzy matchName to ensure edits stick even if Supabase name format changed slightly
+            const mod = mods.find(m => matchName(m.nm, emp.nm));
             if (mod) {
-              // Skip employees that were only modified by optimization baking (legacy data)
-              // If _changes is missing or contains ONLY optimization reasons, ignore the cached modification
-              const hasManualChanges = mod._changes && mod._changes.length > 0 && mod._changes.some(c => 
-                c.reason && !c.reason.toLowerCase().includes('оптимизац')
+              // Only skip if the record is explicitly marked with only optimization reasons
+              // and has no valid change data
+              const isOnlyOpt = mod._changes && mod._changes.length > 0 && mod._changes.every(c => 
+                c.reason && c.reason.toLowerCase().includes('оптимизац')
               );
               
-              if (!hasManualChanges) return emp; // Discard optimization-only or empty cache
-              return { ...emp, ...mod, _original: { ...emp } };
+              if (isOnlyOpt && !mod._modified) return emp; 
+              
+              return { ...emp, ...mod, nm: emp.nm, _original: { ...emp } };
             }
             return emp;
           });
-          // Re-save cache without optimization-only entries
-          saveCache(mergedEmps);
         }
       } catch(e) {
         console.error('Failed to load checkpoints:', e);
