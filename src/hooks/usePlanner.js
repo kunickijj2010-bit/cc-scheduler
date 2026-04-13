@@ -53,10 +53,12 @@ function reducer(state, action) {
             const mod = mods.find(m => m.nm === emp.nm);
             if (mod) {
               // Skip employees that were only modified by optimization baking (legacy data)
-              const hasManualChanges = mod._changes && mod._changes.some(c => 
-                !c.reason || !c.reason.toLowerCase().includes('оптимизац')
+              // If _changes is missing or contains ONLY optimization reasons, ignore the cached modification
+              const hasManualChanges = mod._changes && mod._changes.length > 0 && mod._changes.some(c => 
+                c.reason && !c.reason.toLowerCase().includes('оптимизац')
               );
-              if (!hasManualChanges) return emp; // Discard optimization-only cache
+              
+              if (!hasManualChanges) return emp; // Discard optimization-only or empty cache
               return { ...emp, ...mod, _original: { ...emp } };
             }
             return emp;

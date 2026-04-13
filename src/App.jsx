@@ -117,20 +117,27 @@ export default function App() {
   // Count optimization-affected employees across effective variants
   const optChangedCount = useMemo(() => {
     let count = 0;
-    const dm = MD[curMonth];
-    
     for (const e of filteredEmps) {
       const v = effectiveVars[e.dp] || 'current';
       if (v === 'current') continue;
       
       const vChanges = getChangesForVariant(v);
-      for (let d = 0; d < dm; d++) {
-        const eff = getEffectiveHours(e, curMonth, d, vChanges);
-        if (eff.changed) { count++; break; }
+      let changedAnywhere = false;
+      for (let m = 0; m < 12; m++) {
+        const dm = MD[m];
+        for (let d = 0; d < dm; d++) {
+          const eff = getEffectiveHours(e, m, d, vChanges);
+          if (eff.changed) {
+            count++;
+            changedAnywhere = true;
+            break;
+          }
+        }
+        if (changedAnywhere) break;
       }
     }
     return count;
-  }, [filteredEmps, effectiveVars, curMonth]);
+  }, [filteredEmps, effectiveVars]);
 
   // Ensure auto-shifts are computed for any department that needs them (D or C)
   useMemo(() => {

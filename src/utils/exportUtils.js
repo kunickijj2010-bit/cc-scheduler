@@ -35,11 +35,21 @@ export async function exportToExcel(employees, metrics, curMonth, appliedOpts = 
       const v = appliedOpts[dp] || 'current';
       if (v === 'current') continue;
       const vChanges = getChangesForVariant(v);
-      for (const e of employees.filter(emp => emp.dp === dp)) {
-        const dm = MD[0];
-        for (let d = 0; d < dm; d++) {
-          const eff = getEffectiveHours(e, 0, d, vChanges);
-          if (eff.changed) { optAffected.add(e.nm); break; }
+      const deptEmps = employees.filter(emp => emp.dp === dp);
+      for (const e of deptEmps) {
+        let changedAnywhere = false;
+        // Check across all months to be sure
+        for (let m = 0; m < 12; m++) {
+          const dm = MD[m];
+          for (let d = 0; d < dm; d++) {
+            const eff = getEffectiveHours(e, m, d, vChanges);
+            if (eff.changed) {
+              optAffected.add(e.nm);
+              changedAnywhere = true;
+              break;
+            }
+          }
+          if (changedAnywhere) break;
         }
       }
     }
@@ -69,10 +79,17 @@ export async function exportToExcel(employees, metrics, curMonth, appliedOpts = 
       if (v !== 'current') {
         const vChanges = getChangesForVariant(v);
         for (const e of deptEmps) {
-          const dm = MD[0];
-          for (let d = 0; d < dm; d++) {
-            const eff = getEffectiveHours(e, 0, d, vChanges);
-            if (eff.changed) { oCount++; break; }
+          let found = false;
+          for (let m = 0; m < 12; m++) {
+            const dm = MD[m];
+            for (let d = 0; d < dm; d++) {
+              if (getEffectiveHours(e, m, d, vChanges).changed) {
+                oCount++;
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
           }
         }
       }
