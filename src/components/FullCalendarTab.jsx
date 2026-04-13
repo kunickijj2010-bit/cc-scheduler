@@ -28,7 +28,7 @@ export default function FullCalendarTab({ employees, curMonth, isForecast, deptO
 
   const getOptFor = (e) => {
     if (!deptOptVars) return 'current';
-    return deptOptVars['all'] !== 'current' ? deptOptVars['all'] : (deptOptVars[e.dp] || 'current');
+    return deptOptVars[e.dp] || 'current';
   };
 
   // Check if any employee has manual modifications

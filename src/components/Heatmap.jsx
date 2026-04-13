@@ -15,7 +15,7 @@ export default function Heatmap({ employees, metrics, curMonth, curDept, isForec
 
   const getOptFor = (emp) => {
     if (!deptOptVars) return 'current';
-    return deptOptVars['all'] !== 'current' ? deptOptVars['all'] : (deptOptVars[emp.dp] || 'current');
+    return deptOptVars[emp.dp] || 'current';
   };
 
   const isAnyOpt = useMemo(() => {

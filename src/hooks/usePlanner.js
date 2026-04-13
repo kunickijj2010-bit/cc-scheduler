@@ -51,9 +51,18 @@ function reducer(state, action) {
           const mods = JSON.parse(cached);
           mergedEmps = mergedEmps.map(emp => {
             const mod = mods.find(m => m.nm === emp.nm);
-            if (mod) return { ...emp, ...mod, _original: { ...emp } };
+            if (mod) {
+              // Skip employees that were only modified by optimization baking (legacy data)
+              const hasManualChanges = mod._changes && mod._changes.some(c => 
+                !c.reason || !c.reason.toLowerCase().includes('оптимизац')
+              );
+              if (!hasManualChanges) return emp; // Discard optimization-only cache
+              return { ...emp, ...mod, _original: { ...emp } };
+            }
             return emp;
           });
+          // Re-save cache without optimization-only entries
+          saveCache(mergedEmps);
         }
       } catch(e) {
         console.error('Failed to load checkpoints:', e);

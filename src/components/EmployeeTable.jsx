@@ -15,7 +15,7 @@ export default function EmployeeTable({ employees, curMonth, onSetDay, onChangeP
 
   const getOptFor = useCallback((emp) => {
     if (!deptOptVars) return 'current';
-    return deptOptVars['all'] !== 'current' ? deptOptVars['all'] : (deptOptVars[emp.dp] || 'current');
+    return deptOptVars[emp.dp] || 'current';
   }, [deptOptVars]);
 
   const handleContextMenu = useCallback((e, emp) => (evt, month, day, value) => {
