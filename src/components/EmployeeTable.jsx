@@ -120,27 +120,21 @@ export default function EmployeeTable({ employees, curMonth, onSetDay, onChangeP
                   </span>
                 </td>
                 <td
-                  className={`cell-shift ${(empEff?.newWh || (emp._modified && (emp._original && emp._original.whm ? emp._original.whm[curMonth][0] : emp._original?.wh) !== (emp.whm ? emp.whm[curMonth][0] : emp.wh))) ? 'cell-shift-changed' : ''}`}
+                  className={`cell-shift ${empEff?.newWh ? 'cell-shift-changed' : ''} ${(!empEff?.newWh && emp._modified && emp._original?.wh !== emp.wh) ? 'cell-shift-manual' : ''}`}
                   onDoubleClick={(e) => { e.stopPropagation(); setEditEmp(emp); }}
                   title={
-                    empEff?.newWh ? `Было: ${(emp.whm ? emp.whm[curMonth][0] : emp.wh)} → Стало: ${empEff.newWh}\n${empEff.effect || ''}` : 
-                    (emp._modified && (emp._original && emp._original.whm ? emp._original.whm[curMonth][0] : emp._original?.wh) !== (emp.whm ? emp.whm[curMonth][0] : emp.wh)) ? `Было (сохранено): ${(emp._original && emp._original.whm ? emp._original.whm[curMonth][0] : emp._original?.wh)} → Стало: ${(emp.whm ? emp.whm[curMonth][0] : emp.wh)}` : 
-                    (emp.whm ? emp.whm[curMonth][0] : emp.wh)
+                    empEff?.newWh ? `Оптимизация: ${emp.wh} → ${empEff.newWh}\n${empEff.effect || ''}` : 
+                    (emp._modified && emp._original?.wh !== emp.wh) ? `Изменено: ${emp._original?.wh} → ${emp.wh}` : 
+                    emp.wh
                   }
                 >
-                  {empEff?.newWh ? (
-                    <>
-                      <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8em' }}>{(emp.whm ? emp.whm[curMonth][0] : emp.wh)}</span>
-                      <br />
-                      <span style={{ color: 'var(--ac)', fontWeight: 600 }}>{empEff.newWh}</span>
-                    </>
-                  ) : (emp._modified && (emp._original && emp._original.whm ? emp._original.whm[curMonth][0] : emp._original?.wh) !== (emp.whm ? emp.whm[curMonth][0] : emp.wh)) ? (
-                    <>
-                      <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8em' }}>{(emp._original && emp._original.whm ? emp._original.whm[curMonth][0] : emp._original?.wh)}</span>
-                      <br />
-                      <span style={{ color: 'var(--g)', fontWeight: 600 }}>{(emp.whm ? emp.whm[curMonth][0] : emp.wh)}</span>
-                    </>
-                  ) : (emp.whm ? emp.whm[curMonth][0] : emp.wh)}
+                  {empEff?.newWh ? (<>
+                    <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '0.8em' }}>{emp.wh}</span>
+                    <br />
+                    <span style={{ color: 'var(--ac)', fontWeight: 600 }}>{empEff.newWh}</span>
+                  </>) : (
+                    <>{emp.wh}{emp._modified && emp._original?.wh !== emp.wh && <span style={{ color: 'var(--g)', fontSize: '0.65em', display: 'block', opacity: 0.7 }}>★ {emp._original?.wh}</span>}</>
+                  )}
                 </td>
                 <td className="cell-pat">{emp.pat}</td>
                 {isPreview && empEff ? (

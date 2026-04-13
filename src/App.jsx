@@ -198,7 +198,7 @@ export default function App() {
           {planner.hasCache && (
             <button
               className="btn-icon"
-              onClick={planner.clearCache}
+              onClick={() => { if (confirm('Сбросить ВСЕ изменения (ручные + оптимизации) и вернуться к исходным данным?')) planner.clearCache(); }}
               style={{ color: 'var(--r)' }}
               title="Сброс всех локальных изменений"
             >🔄</button>
@@ -331,12 +331,6 @@ export default function App() {
                   <button className="btn btn-primary" style={{ marginLeft: 8, padding: '2px 8px', fontSize: '.8rem' }} onClick={bakeOptimization}>
                     ✅ Внедрить в расписание
                   </button>
-                )}
-                {planner.canUndo && (
-                  <button className="btn-icon" style={{ marginLeft: 4, fontSize: '.85rem' }} onClick={planner.undo} title="Отменить последнее действие (Ctrl+Z)">↩️</button>
-                )}
-                {planner.hasCache && (
-                  <button className="btn-icon" style={{ marginLeft: 4, fontSize: '.75rem', color: 'var(--r)' }} onClick={() => { if (confirm('Сбросить ВСЕ изменения и вернуться к исходным данным?')) planner.clearCache(); }} title="Сбросить все изменения">🗑️ Сброс</button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
